@@ -1,0 +1,725 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chess</title>
+    <style>
+        /* --- Basic Styles & Typography --- */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+        :root {
+            --board-size: min(90vw, 75vh);
+            --square-size: calc(var(--board-size) / 8);
+            --light-square: #f0d9b5;
+            --dark-square: #b58863;
+            --selected-color: rgba(30, 180, 150, 0.7);
+            --last-move-color: rgba(205, 210, 100, 0.7);
+            --move-dot-color: rgba(0, 0, 0, 0.3);
+            --capture-ring-color: rgba(200, 60, 60, 0.5);
+            --check-color: rgba(255, 0, 0, 0.5);
+            --background-color: #312e2b;
+            --text-color: #e0e0e0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        /* --- Game & Connection Containers --- */
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* --- Main Menu & CPU Select --- */
+        #main-menu, #cpu-select {
+            background-color: rgba(0,0,0,0.2);
+            padding: 25px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .menu-button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            width: 250px;
+            text-align: center;
+        }
+
+            .menu-button:hover {
+                background-color: #357abd;
+            }
+
+        .selection-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+
+        /* --- WebRTC P2P Setup --- */
+        #p2p-setup {
+            background-color: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            width: clamp(300px, 90%, 600px);
+        }
+
+            #p2p-setup h2 {
+                margin-top: 0;
+            }
+
+        .p2p-step {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 10px;
+        }
+
+            .p2p-step textarea {
+                width: 100%;
+                min-height: 80px;
+                background: #4a4a4a;
+                color: var(--text-color);
+                border: 1px solid #555;
+                border-radius: 6px;
+                resize: vertical;
+            }
+
+        .p2p-button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+            .p2p-button:hover {
+                background-color: #357abd;
+            }
+
+        #connection-status {
+            font-weight: 500;
+            color: #ffc107;
+        }
+
+        /* --- Chessboard --- */
+        .chessboard {
+            width: var(--board-size);
+            height: var(--board-size);
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            border: 6px solid #4a4a4a;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: transform 0.5s ease;
+        }
+
+            .chessboard.flipped {
+                transform: rotate(180deg);
+            }
+
+                .chessboard.flipped .piece {
+                    transform: rotate(180deg);
+                }
+
+            .chessboard.disabled .piece {
+                cursor: not-allowed;
+            }
+
+        .square {
+            width: var(--square-size);
+            height: var(--square-size);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+            .square.light {
+                background-color: var(--light-square);
+            }
+
+            .square.dark {
+                background-color: var(--dark-square);
+            }
+
+        /* --- Pieces & Highlights --- */
+        .piece {
+            font-size: calc(var(--square-size) * 0.75);
+            cursor: pointer;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            user-select: none;
+            transition: transform 0.5s ease;
+        }
+
+        .square.selected {
+            background-color: var(--selected-color);
+        }
+
+        .square.last-move {
+            background-color: var(--last-move-color);
+        }
+
+        .square.check-highlight {
+            background-color: var(--check-color);
+        }
+
+        .possible-move-dot {
+            width: 30%;
+            height: 30%;
+            background-color: var(--move-dot-color);
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .possible-capture-ring {
+            width: 90%;
+            height: 90%;
+            border: calc(var(--square-size) * 0.08) solid var(--capture-ring-color);
+            border-radius: 50%;
+            box-sizing: border-box;
+            position: absolute;
+        }
+
+        /* --- Game Info & Auxiliary Panels --- */
+        .game-info {
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #player-info, #status {
+            font-size: 1.2em;
+            font-weight: 500;
+            min-height: 40px;
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        #reset-button, #flip-board-btn {
+            background-color: #c94c4c;
+            color: white;
+            border: none;
+            padding: 12px 0;
+            font-size: 1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            flex-grow: 1;
+        }
+
+        #flip-board-btn {
+            background-color: #6c757d;
+        }
+
+        #reset-button:hover {
+            background-color: #a33b3b;
+        }
+
+        #flip-board-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .auxiliary-info {
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .captured-pieces, .move-history {
+            background-color: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+            .captured-pieces h3, .move-history h3 {
+                margin: 0 0 10px 0;
+                text-align: center;
+            }
+
+        .captured-pieces-list {
+            min-height: 30px;
+            font-size: 1.5em;
+            word-wrap: break-word;
+        }
+
+        #move-history-list {
+            height: 150px;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+            #move-history-list li {
+                padding: 2px 5px;
+            }
+
+                #move-history-list li:nth-child(odd) {
+                    background-color: rgba(255,255,255,0.05);
+                }
+
+        /* --- Modal for Promotion --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .promotion-modal {
+            background: var(--background-color);
+            padding: 25px;
+            border-radius: 10px;
+            display: flex;
+            gap: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+        }
+
+        .promotion-piece {
+            font-size: calc(var(--square-size) * 0.9);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+            .promotion-piece:hover {
+                transform: scale(1.15);
+            }
+
+        @media (max-width: 1100px) {
+            .main-content {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .auxiliary-info {
+                flex-direction: row;
+                width: var(--board-size);
+            }
+
+            .captured-pieces, .move-history {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Live Chess</h1>
+
+        <div id="main-menu">
+            <button id="play-cpu-btn" class="menu-button">Play vs. Computer</button>
+            <button id="play-p2p-btn" class="menu-button">Play vs. Friend (P2P)</button>
+        </div>
+
+        <div id="cpu-select" class="hidden">
+            <div id="color-select" class="selection-group">
+                <h2>Choose Your Color</h2>
+                <button id="play-white-btn" class="menu-button">Play as White</button>
+                <button id="play-black-btn" class="menu-button">Play as Black</button>
+            </div>
+            <div id="difficulty-select" class="selection-group hidden">
+                <h2>Choose Difficulty</h2>
+                <button data-difficulty="easy" class="menu-button">Easy</button>
+                <button data-difficulty="medium" class="menu-button">Medium</button>
+                <button data-difficulty="hard" class="menu-button">Hard</button>
+            </div>
+        </div>
+
+        <div id="p2p-setup" class="hidden">
+            <h2>Peer-to-Peer Connection</h2>
+            <div id="connection-status">Status: Disconnected</div>
+            <div class="p2p-step">
+                <button id="host-btn" class="p2p-button">1. Host Game (Get Offer)</button>
+                <textarea id="offer-sdp" placeholder="Offer details will appear here. Copy and send." readonly></textarea>
+            </div>
+            <div class="p2p-step">
+                <textarea id="answer-sdp-input" placeholder="Paste friend's Offer OR Answer here"></textarea>
+                <button id="join-btn" class="p2p-button">2. Join Game (with Offer)</button>
+                <button id="confirm-btn" class="p2p-button">3. Confirm Connection (with Answer)</button>
+            </div>
+        </div>
+
+        <div class="main-content hidden" id="game-area">
+            <div class="auxiliary-info">
+                <div class="captured-pieces">
+                    <h3>Black's Captures</h3>
+                    <div id="white-captured" class="captured-pieces-list"></div>
+                </div>
+                <div class="move-history">
+                    <h3>Move History</h3>
+                    <ul id="move-history-list"></ul>
+                </div>
+            </div>
+
+            <div id="chessboard" class="chessboard"></div>
+
+            <div class="game-info">
+                <div id="player-info"></div>
+                <div id="status">White's Turn</div>
+                <div class="game-controls">
+                    <button id="flip-board-btn">Flip Board</button>
+                    <button id="reset-button">Main Menu</button>
+                </div>
+            </div>
+
+            <div class="auxiliary-info">
+                <div class="captured-pieces">
+                    <h3>White's Captures</h3>
+                    <div id="black-captured" class="captured-pieces-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="promotion-overlay" class="modal-overlay">
+        <div class="promotion-modal"></div>
+    </div>
+
+    <audio id="move-sound" src="https://images.chesscomfiles.com/chess-themes/sounds/_WEBM_/default/move-self.webm" preload="auto"></audio>
+    <audio id="capture-sound" src="https://images.chesscomfiles.com/chess-themes/sounds/_WEBM_/default/capture.webm" preload="auto"></audio>
+    <audio id="check-sound" src="https://images.chesscomfiles.com/chess-themes/sounds/_WEBM_/default/move-check.webm" preload="auto"></audio>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const boardElement = document.getElementById('chessboard');
+            const statusElement = document.getElementById('status');
+            const resetButton = document.getElementById('reset-button');
+            const promotionOverlay = document.getElementById('promotion-overlay');
+            const promotionModal = promotionOverlay.querySelector('.promotion-modal');
+            const playerInfoElement = document.getElementById('player-info');
+            const flipBoardBtn = document.getElementById('flip-board-btn');
+
+            // New UI Elements
+            const whiteCapturedElement = document.getElementById('white-captured');
+            const blackCapturedElement = document.getElementById('black-captured');
+            const moveHistoryList = document.getElementById('move-history-list');
+
+            // Sound Elements
+            const moveSound = document.getElementById('move-sound');
+            const captureSound = document.getElementById('capture-sound');
+            const checkSound = document.getElementById('check-sound');
+
+            // --- Rest of DOM elements are unchanged ---
+            const mainMenu = document.getElementById('main-menu');
+            const p2pSetup = document.getElementById('p2p-setup');
+            const gameArea = document.getElementById('game-area');
+            const cpuSelect = document.getElementById('cpu-select');
+            const colorSelect = document.getElementById('color-select');
+            const difficultySelect = document.getElementById('difficulty-select');
+            const playCpuBtn = document.getElementById('play-cpu-btn');
+            const playP2pBtn = document.getElementById('play-p2p-btn');
+            const playWhiteBtn = document.getElementById('play-white-btn');
+            const playBlackBtn = document.getElementById('play-black-btn');
+            const hostBtn = document.getElementById('host-btn');
+            const joinBtn = document.getElementById('join-btn');
+            const confirmBtn = document.getElementById('confirm-btn');
+            const offerSdpText = document.getElementById('offer-sdp');
+            const answerSdpInput = document.getElementById('answer-sdp-input');
+            const connectionStatus = document.getElementById('connection-status');
+
+            // --- Game Mode & UI State ---
+            let gameMode = null, playerColor, aiColor, aiDifficulty;
+            let boardFlipped = false;
+
+            // --- P2P State ---
+            let peerConnection, dataChannel;
+            const iceServers = { iceServers: [ { urls: 'stun:stun.l.google.com:19302' } ] };
+
+            // --- Piece Constants & Game State ---
+            const PIECES = {};
+            const initialBoard = [];
+            const pieceValues = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 100 };
+            PIECES.wK = '♔'; PIECES.wQ = '♕'; PIECES.wR = '♖'; PIECES.wB = '♗'; PIECES.wN = '♘'; PIECES.wP = '♙';
+            PIECES.bK = '♚'; PIECES.bQ = '♛'; PIECES.bR = '♜'; PIECES.bB = '♝'; PIECES.bN = '♞'; PIECES.bP = '♟︎';
+            initialBoard.push(
+                ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'],
+                ['bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP'],
+                Array(8).fill(null), Array(8).fill(null), Array(8).fill(null), Array(8).fill(null),
+                ['wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP'],
+                ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR']
+            );
+
+            // Game State
+            let boardState = [], currentPlayer = 'w', selectedSquare = null, possibleMoves = [];
+            let whiteKingPosition = [7, 4], blackKingPosition = [0, 4], isGameOver = false;
+            let castlingRights = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
+            let enPassantTarget = null;
+
+            // New State for UI improvements
+            let lastMove = null;
+            let capturedPieces = { w: [], b: [] };
+            let moveHistory = [];
+
+            // --- UI Navigation (Unchanged) ---
+            function showMainMenu() {
+                mainMenu.classList.remove('hidden');
+                p2pSetup.classList.add('hidden');
+                gameArea.classList.add('hidden');
+                cpuSelect.classList.add('hidden');
+                colorSelect.classList.remove('hidden');
+                difficultySelect.classList.add('hidden');
+                if (peerConnection) peerConnection.close();
+            }
+            playCpuBtn.addEventListener('click', () => { mainMenu.classList.add('hidden'); cpuSelect.classList.remove('hidden'); });
+            playP2pBtn.addEventListener('click', () => { mainMenu.classList.add('hidden'); p2pSetup.classList.remove('hidden'); });
+            function handleColorSelect(pColor) { playerColor = pColor; aiColor = pColor === 'w' ? 'b' : 'w'; colorSelect.classList.add('hidden'); difficultySelect.classList.remove('hidden'); }
+            playWhiteBtn.addEventListener('click', () => handleColorSelect('w'));
+            playBlackBtn.addEventListener('click', () => handleColorSelect('b'));
+            difficultySelect.addEventListener('click', (e) => { if (e.target.matches('.menu-button')) { aiDifficulty = e.target.dataset.difficulty; startGame('cpu', playerColor); } });
+            function startGame(mode, pColor) { gameMode = mode; playerColor = pColor; cpuSelect.classList.add('hidden'); p2pSetup.classList.add('hidden'); gameArea.classList.remove('hidden'); initializeGame(); }
+
+            // --- P2P Logic (Unchanged) ---
+            async function hostGame() { /* Unchanged */ }
+            async function joinGame() { /* Unchanged */ }
+            async function confirmConnection() { /* Unchanged */ }
+            function setupDataChannelEvents() { /* Unchanged */ }
+            hostGame=async()=>{playerColor='w';peerConnection=new RTCPeerConnection(iceServers);dataChannel=peerConnection.createDataChannel('chess');setupDataChannelEvents();peerConnection.onicecandidate=e=>{if(!e.candidate)offerSdpText.value=JSON.stringify(peerConnection.localDescription);};const o=await peerConnection.createOffer();await peerConnection.setLocalDescription(o);connectionStatus.textContent="Status: Offer created.";}
+            joinGame=async()=>{playerColor='b';let o;try{o=JSON.parse(answerSdpInput.value);}catch(e){alert("Invalid offer.");return;}peerConnection=new RTCPeerConnection(iceServers);peerConnection.onicecandidate=e=>{if(!e.candidate){answerSdpInput.value=JSON.stringify(peerConnection.localDescription);answerSdpInput.placeholder="Answer created. Send back.";}};peerConnection.ondatachannel=e=>{dataChannel=e.channel;setupDataChannelEvents();};await peerConnection.setRemoteDescription(o);const a=await peerConnection.createAnswer();await peerConnection.setLocalDescription(a);connectionStatus.textContent="Status: Answer created.";}
+            confirmConnection=async()=>{if(!peerConnection){alert("Host first.");return;}let a;try{a=JSON.parse(answerSdpInput.value);}catch(e){alert("Invalid answer.");return;}if(!peerConnection.currentRemoteDescription)await peerConnection.setRemoteDescription(a);}
+            setupDataChannelEvents=()=>{dataChannel.onopen=()=>{connectionStatus.textContent="Status: Connected!";startGame('p2p',playerColor);};dataChannel.onmessage=e=>{const m=JSON.parse(e.data);if(m.promotion)executePromotion(m.promotion,m.at,true);else if(m.from)makeMove(m.from,m.to,true);};dataChannel.onclose=()=>{alert("Connection closed.");showMainMenu();};}
+
+            // --- Core Game Logic ---
+            function initializeGame() {
+                // ... Reset game state ...
+                boardState = JSON.parse(JSON.stringify(initialBoard));
+                currentPlayer = 'w'; selectedSquare = null; possibleMoves = []; isGameOver = false;
+                whiteKingPosition = [7, 4]; blackKingPosition = [0, 4];
+                castlingRights = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
+                enPassantTarget = null;
+                // Reset new state
+                lastMove = null;
+                capturedPieces = { w: [], b: [] };
+                moveHistory = [];
+                boardFlipped = false;
+                boardElement.classList.remove('flipped');
+
+                createBoard();
+                renderAll();
+
+                if (gameMode === 'cpu' && currentPlayer === aiColor) {
+                    setTimeout(makeAiMove, 500);
+                }
+            }
+
+            function renderAll() {
+                renderBoard();
+                renderCapturedPieces();
+                renderMoveHistory();
+                updateStatus();
+                updatePlayerInfo();
+            }
+
+            function makeMove(from, to, isRemote = false) {
+                if (gameMode === 'p2p' && !isRemote) {
+                    dataChannel.send(JSON.stringify({ from, to }));
+                }
+
+                lastMove = { from, to };
+                const [fromRow, fromCol] = from; const [toRow, toCol] = to;
+                const piece = boardState[fromRow][fromCol];
+                const captured = boardState[toRow][toCol];
+
+                addMoveToHistory(from, to, piece, captured);
+
+                if(captured) {
+                    const capturedColor = captured[0];
+                    const capturingColor = piece[0];
+                    capturedPieces[capturingColor].push(captured);
+                    capturedPieces[capturingColor].sort((a,b) => pieceValues[a[1]] - pieceValues[b[1]]);
+                }
+
+                // --- Rest of makeMove logic is the same ---
+                if(piece.endsWith('P')&&enPassantTarget&&toRow===enPassantTarget[0]&&toCol===enPassantTarget[1]){const capR=currentPlayer==='w'?toRow+1:toRow-1;boardState[capR][toCol]=null;}
+                if(piece.endsWith('P')&&Math.abs(fromRow-toRow)===2){enPassantTarget=[currentPlayer==='w'?fromRow-1:fromRow+1,fromCol];}else{enPassantTarget=null;}
+                if(piece.endsWith('K')&&Math.abs(fromCol-toCol)===2){if(toCol>fromCol){boardState[fromRow][5]=boardState[fromRow][7];boardState[fromRow][7]=null;}else{boardState[fromRow][3]=boardState[fromRow][0];boardState[fromRow][0]=null;}}
+                boardState[toRow][toCol]=piece; boardState[fromRow][fromCol]=null;
+                if(piece.endsWith('K')){if(currentPlayer==='w')whiteKingPosition=to;else blackKingPosition=to;}
+                if(piece.endsWith('K')){castlingRights[currentPlayer].kingSide=false;castlingRights[currentPlayer].queenSide=false;}
+                if(piece.endsWith('R')){if(fromCol===0)castlingRights[currentPlayer].queenSide=false;if(fromCol===7)castlingRights[currentPlayer].kingSide=false;}
+
+                if (piece.endsWith('P') && (toRow === 0 || toRow === 7)) {
+                    promotePawn(toRow, toCol);
+                    return;
+                }
+                switchTurn(captured);
+            }
+
+            function switchTurn(captured) {
+                currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+                selectedSquare = null; possibleMoves = [];
+
+                renderAll();
+                checkGameOver();
+
+                // Play sounds after render
+                if (!isGameOver) {
+                    const isCheck = isKingInCheck(currentPlayer);
+                    if (isCheck) checkSound.play().catch(e => {});
+                    else if (captured) captureSound.play().catch(e => {});
+                    else moveSound.play().catch(e => {});
+                }
+
+
+                if (!isGameOver && gameMode === 'cpu' && currentPlayer === aiColor) {
+                    setTimeout(makeAiMove, 500);
+                }
+            }
+
+            // --- New Rendering and Helper Functions ---
+
+            function renderBoard() {
+                clearHighlights();
+                for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=boardState[r][c],s=boardElement.querySelector(`[data-row='${r}'][data-col='${c}']`);const e=s.querySelector('.piece');if(e)e.remove();if(p){const n=document.createElement('div');n.classList.add('piece');n.textContent=PIECES[p];n.style.color=p.startsWith('w')?'#fff':'#000';s.appendChild(n);}}
+                if(lastMove) {
+                    boardElement.querySelector(`[data-row='${lastMove.from[0]}'][data-col='${lastMove.from[1]}']`).classList.add('last-move');
+                    boardElement.querySelector(`[data-row='${lastMove.to[0]}'][data-col='${lastMove.to[1]}']`).classList.add('last-move');
+                }
+                if(isKingInCheck('w')) highlightKingSquare(whiteKingPosition);
+                if(isKingInCheck('b')) highlightKingSquare(blackKingPosition);
+            }
+
+            function renderCapturedPieces() {
+                whiteCapturedElement.innerHTML = capturedPieces.b.map(p => PIECES[p]).join(' ');
+                blackCapturedElement.innerHTML = capturedPieces.w.map(p => PIECES[p]).join(' ');
+            }
+
+            function renderMoveHistory() {
+                moveHistoryList.innerHTML = moveHistory.map(move => `<li>${move}</li>`).join('');
+                moveHistoryList.scrollTop = moveHistoryList.scrollHeight;
+            }
+
+            function addMoveToHistory(from, to, piece, captured) {
+                const moveNum = Math.floor(moveHistory.length / 2) + 1;
+                const turn = currentPlayer === 'w' ? `${moveNum}. ` : '';
+                const cols = 'abcdefgh';
+                let notation = piece.endsWith('P') ? '' : PIECES[piece].trim();
+                if (captured) {
+                    if (piece.endsWith('P')) notation += cols[from[1]];
+                    notation += 'x';
+                }
+                notation += `${cols[to[1]]}${8-to[0]}`;
+
+                moveHistory.push(`${turn}${notation}`);
+            }
+
+            flipBoardBtn.addEventListener('click', () => {
+                boardFlipped = !boardFlipped;
+                boardElement.classList.toggle('flipped', boardFlipped);
+            });
+
+
+            // --- AI Logic & Other Helpers (Mostly Unchanged) ---
+            onSquareClick=(e)=>{if(isGameOver||(gameMode==='p2p'&&currentPlayer!==playerColor)||(gameMode==='cpu'&&currentPlayer===aiColor))return;const s=e.currentTarget,r=parseInt(s.dataset.row),c=parseInt(s.dataset.col);if(selectedSquare){const v=possibleMoves.some(m=>m[0]===r&&m[1]===c);if(v)makeMove(selectedSquare,[r,c]);else{clearHighlights();selectedSquare=null;possibleMoves=[];const p=boardState[r][c];if(p&&p.startsWith(currentPlayer))selectPiece(r,c);}}else{const p=boardState[r][c];if(p&&p.startsWith(currentPlayer))selectPiece(r,c);}}
+            promotePawn=(r,c)=>{if(gameMode==='cpu'&&currentPlayer===aiColor){executePromotion(aiColor+'Q',[r,c]);return;}promotionOverlay.style.display='flex';promotionModal.innerHTML='';['Q','R','B','N'].forEach(p=>{const k=currentPlayer+p,e=document.createElement('div');e.classList.add('promotion-piece');e.textContent=PIECES[k];e.style.color=currentPlayer==='w'?'#fff':'#000';e.addEventListener('click',()=>executePromotion(k,[r,c]));promotionModal.appendChild(e);});}
+            executePromotion=(k,[r,c],isRemote=false)=>{if(gameMode==='p2p'&&!isRemote)dataChannel.send(JSON.stringify({promotion:k,at:[r,c]}));boardState[r][c]=k;promotionOverlay.style.display='none';switchTurn(null);}
+            makeAiMove=()=>{let m;switch(aiDifficulty){case'easy':m=getBestAiMoveEasy();break;case'medium':m=getBestAiMoveMedium();break;case'hard':m=getBestAiMoveHard();break;default:m=getBestAiMoveEasy();}if(m)makeMove(m.from,m.to);}
+            getAllPieces=(c,b=boardState)=>{const p=[];for(let r=0;r<8;r++)for(let o=0;o<8;o++)if(b[r][o]&&b[r][o].startsWith(c))p.push({pos:[r,o],piece:b[r][o]});return p;}
+            getBestAiMoveEasy=()=>{const p=getAllPieces(aiColor);let b=[],s=-Infinity;for(const{pos}of p){const[r,c]=pos;const m=getValidMoves(r,c);for(const v of m){const[tr,tc]=v;let C=0;const a=boardState[tr][tc];if(a)C=pieceValues[a.substring(1)];if(C>s){s=C;b=[{from:[r,c],to:v}];}else if(C===s)b.push({from:[r,c],to:v});}}if(b.length>0&&s>0)return b[Math.floor(Math.random()*b.length)];const A=[];for(const{pos}of p){getValidMoves(pos[0],pos[1]).forEach(m=>A.push({from:pos,to:m}));}return A.length>0?A[Math.floor(Math.random()*A.length)]:null;}
+            getBestAiMoveMedium=()=>{const p=getAllPieces(aiColor);let b=[],s=-Infinity;for(const{pos}of p){const[r,c]=pos;const m=getValidMoves(r,c);for(const v of m){const[tr,tc]=v;let S=0;const a=boardState[tr][tc];if(a)S+=pieceValues[a.substring(1)];const t=JSON.parse(JSON.stringify(boardState));t[tr][tc]=t[r][c];t[r][c]=null;if(isSquareAttacked(tr,tc,aiColor,t))S-=pieceValues[t[tr][tc].substring(1)];if(S>s){s=S;b=[{from:pos,to:v}];}else if(S===s)b.push({from:pos,to:v});}}return b.length>0?b[Math.floor(Math.random()*b.length)]:getBestAiMoveEasy();}
+            getBestAiMoveHard=()=>{const p=getAllPieces(aiColor);let b=[],s=-Infinity;for(const{pos}of p){const[r,c]=pos;const m=getValidMoves(r,c);for(const v of m){const[tr,tc]=v;let S=0;const t=JSON.parse(JSON.stringify(boardState));const a=t[tr][tc];if(a)S+=pieceValues[a.substring(1)];t[tr][tc]=t[r][c];t[r][c]=null;let M=0;const O=getAllPieces(playerColor,t);for(const{pos:op}of O){const o=getValidMoves(op[0],op[1],t);for(const X of o){const u=t[X[0]][X[1]];if(u){const V=pieceValues[u.substring(1)];if(V>M)M=V;}}}S-=M;if(S>s){s=S;b=[{from:pos,to:v}];}else if(S===s)b.push({from:pos,to:v});}}return b.length>0?b[Math.floor(Math.random()*b.length)]:getBestAiMoveEasy();}
+            createBoard=()=>{boardElement.innerHTML='';for(let r=0;r<8;r++)for(let c=0;c<8;c++){const s=document.createElement('div');s.classList.add('square',(r+c)%2===0?'light':'dark');s.dataset.row=r;s.dataset.col=c;s.addEventListener('click',onSquareClick);boardElement.appendChild(s);}}
+            highlightKingSquare=([r,c])=>{const s=boardElement.querySelector(`[data-row='${r}'][data-col='${c}']`);if(s)s.classList.add('check-highlight');}
+            selectPiece=(r,c)=>{selectedSquare=[r,c];possibleMoves=getValidMoves(r,c);clearHighlights();renderBoard();boardElement.querySelector(`[data-row='${r}'][data-col='${c}']`).classList.add('selected');highlightPossibleMoves();}
+            checkGameOver=()=>{if(isGameOver)return;let w=false,b=false;for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(boardState[r][c]==='wK')w=true;if(boardState[r][c]==='bK')b=true;}if(!w||!b){isGameOver=true;statusElement.textContent=!w?'Black wins!':'White wins!';return;}const a=getAllValidMoves(currentPlayer);if(a.length===0){isGameOver=true;if(isKingInCheck(currentPlayer)){statusElement.textContent=`Checkmate! ${currentPlayer==='w'?'Black':'White'} wins.`;}else{statusElement.textContent="Stalemate! It's a draw.";}}}
+            updateStatus=()=>{if(isGameOver)return;let s=`${currentPlayer==='w'?'White':'Black'}'s Turn`;if(isKingInCheck(currentPlayer))s+=' - Check!';statusElement.textContent=s;}
+            updatePlayerInfo=()=>{if(gameMode==='cpu')playerInfoElement.textContent=`You vs. Computer (${aiDifficulty})`;else if(gameMode==='p2p')playerInfoElement.textContent=`You are ${playerColor==='w'?'White':'Black'}`;let i=isGameOver;if(!isGameOver){if(gameMode==='p2p'&&playerColor!==currentPlayer)i=true;else if(gameMode==='cpu'&&aiColor===currentPlayer)i=true;}boardElement.classList.toggle('disabled',i);}
+            highlightPossibleMoves=()=>{possibleMoves.forEach(([r,c])=>{const s=boardElement.querySelector(`[data-row='${r}'][data-col='${c}']`);if(boardState[r][c]){const i=document.createElement('div');i.classList.add('possible-capture-ring');s.appendChild(i);}else{const d=document.createElement('div');d.classList.add('possible-move-dot');s.appendChild(d);}});}
+            clearHighlights=()=>{document.querySelectorAll('.selected, .last-move, .check-highlight').forEach(e=>e.classList.remove('selected','last-move','check-highlight'));document.querySelectorAll('.possible-move-dot, .possible-capture-ring').forEach(e=>e.remove());}
+            getValidMoves=(r,c,b=boardState)=>{const m=getPossibleMoves(r,c,b),l=b[r][c][0];return m.filter(v=>{const t=JSON.parse(JSON.stringify(b)),p=t[r][c];t[v[0]][v[1]]=p;t[r][c]=null;let k;if(p.endsWith('K'))k=v;else{const K=l+'K';for(let r1=0;r1<8;r1++)for(let c1=0;c1<8;c1++)if(t[r1][c1]===K)k=[r1,c1];}return!isKingInCheck(l,t,k);});}
+            getAllValidMoves=(c,b=boardState)=>{let a=[];for(let r=0;r<8;r++)for(let o=0;o<8;o++){const p=b[r][o];if(p&&p.startsWith(c)){const m=getValidMoves(r,o,b);if(m.length>0)a.push(...m);}}return a;}
+            getPossibleMoves=(r,c,b=boardState)=>{const p=b[r][c];if(!p)return[];const t=p.substring(1);switch(t){case'P':return getPawnMoves(r,c,b);case'R':return getRookMoves(r,c,b);case'N':return getKnightMoves(r,c,b);case'B':return getBishopMoves(r,c,b);case'Q':return getQueenMoves(r,c,b);case'K':return getKingMoves(r,c,b);default:return[];}}
+            getPawnMoves=(r,c,b=boardState)=>{const m=[],l=b[r][c][0],d=l==='w'?-1:1,s=l==='w'?6:1;if(r+d>=0&&r+d<8&&!b[r+d][c]){m.push([r+d,c]);if(r===s&&!b[r+2*d][c])m.push([r+2*d,c]);}[c-1,c+1].forEach(t=>{if(t>=0&&t<8){const g=b[r+d][t];if(g&&!g.startsWith(l))m.push([r+d,t]);if(enPassantTarget&&r+d===enPassantTarget[0]&&t===enPassantTarget[1])m.push([r+d,t]);}});return m;}
+            getRookMoves=(r,c,b=boardState)=>getSlidingMoves(r,c,[[-1,0],[1,0],[0,-1],[0,1]],b);
+            getBishopMoves=(r,c,b=boardState)=>getSlidingMoves(r,c,[[-1,-1],[-1,1],[1,-1],[1,1]],b);
+            getQueenMoves=(r,c,b=boardState)=>[...getRookMoves(r,c,b),...getBishopMoves(r,c,b)];
+            getKnightMoves=(r,c,b=boardState)=>{const m=[],l=b[r][c][0];[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc])=>{const n=r+dr,o=c+dc;if(n>=0&&n<8&&o>=0&&o<8){const t=b[n][o];if(!t||!t.startsWith(l))m.push([n,o]);}});return m;}
+            getKingMoves=(r,c,b=boardState)=>{const m=[],l=b[r][c][0];[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>{const n=r+dr,o=c+dc;if(n>=0&&n<8&&o>=0&&o<8){const t=b[n][o];if(!t||!t.startsWith(l))m.push([n,o]);}});if(castlingRights[l]&&castlingRights[l].kingSide&&!b[r][c+1]&&!b[r][c+2]&&!isSquareAttacked(r,c,l,b)&&!isSquareAttacked(r,c+1,l,b)&&!isSquareAttacked(r,c+2,l,b))m.push([r,c+2]);if(castlingRights[l]&&castlingRights[l].queenSide&&!b[r][c-1]&&!b[r][c-2]&&!b[r][c-3]&&!isSquareAttacked(r,c,l,b)&&!isSquareAttacked(r,c-1,l,b)&&!isSquareAttacked(r,c-2,l,b))m.push([r,c-2]);return m;}
+            getSlidingMoves=(r,c,i,b=boardState)=>{const m=[],l=b[r][c][0];i.forEach(([dr,dc])=>{let n=r+dr,o=c+dc;while(n>=0&&n<8&&o>=0&&o<8){const t=b[n][o];if(t){if(!t.startsWith(l))m.push([n,o]);break;}m.push([n,o]);n+=dr;o+=dc;}});return m;}
+            isKingInCheck=(k,b=boardState,p)=>{let K=p;if(!K){const P=k+'K';for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(b[r][c]===P){K=[r,c];break;}if(!K)return false;}return isSquareAttacked(K[0],K[1],k,b);}
+            isSquareAttacked=(r,c,b,d=boardState)=>{const o=b==='w'?'b':'w';for(let e=0;e<8;e++)for(let f=0;f<8;f++){const p=d[e][f];if(p&&p.startsWith(o)){const m=getPossibleMovesForAttackCheck(e,f,d);if(m.some(g=>g[0]===r&&g[1]===c))return true;}}return false;}
+            getPossibleMovesForAttackCheck=(r,c,b)=>{const p=b[r][c];if(!p)return[];const t=p.substring(1),l=p[0];switch(t){case'P':return[[r+(l==='w'?-1:1),c-1],[r+(l==='w'?-1:1),c+1]];case'R':return getSlidingMoves(r,c,[[-1,0],[1,0],[0,-1],[0,1]],b);case'N':return getKnightMoves(r,c,b);case'B':return getSlidingMoves(r,c,[[-1,-1],[-1,1],[1,-1],[1,1]],b);case'Q':return[...getSlidingMoves(r,c,[[-1,0],[1,0],[0,-1],[0,1]],b),...getSlidingMoves(r,c,[[-1,-1],[-1,1],[1,-1],[1,1]],b)];case'K':const m=[];[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>{const n=r+dr,o=c+dc;if(n>=0&&n<8&&o>=0&&o<8)m.push([n,o]);});return m;default:return[];}}
+
+            // --- Event Listeners ---
+            hostBtn.addEventListener('click', hostGame);
+            joinBtn.addEventListener('click', joinGame);
+            confirmBtn.addEventListener('click', confirmConnection);
+            resetButton.addEventListener('click', showMainMenu);
+
+            // --- Start ---
+            showMainMenu();
+        });
+    </script>
+</body>
+</html>
+
